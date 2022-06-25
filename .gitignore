@@ -1,6 +1,10 @@
+# Remove arquivos sem extensao
 *
 !*/
 !*.*
+
+.vscode
+*.txt
 
 # Prerequisites
 *.d
