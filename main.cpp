@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <fstream>
+#include <numeric>
 
 using namespace std;
 
@@ -69,14 +70,14 @@ class Aliases {
     ReturnFlag add_alias(string old_name, string new_name) {
       if (old_name == new_name) return {"O alias nao pode ser igual ao comando original", 0};
 
-      if (cmd_pt.count(old_name) > 0) {
-        string old_alias = cmd_pt[old_name];
-        cmd_pt[old_name] = new_name;
-        return {"Alias do comando \"" + old_name + "\" alterado de \"" + old_alias + "\" para \"" + new_name + "\"", 1};
+      if (cmd_pt.count(new_name) > 0) {
+        string old_alias = cmd_pt[new_name];
+        cmd_pt[new_name] = old_name;
+        return {"O alias de \"" + old_name + "\" alterado de \"" + old_alias + "\" para \"" + new_name + "\"", 1};
       }
 
       else {
-        cmd_pt.insert({old_name, new_name});
+        cmd_pt.insert({new_name, old_name});
         return {"Novo alias adicionado: de \"" + old_name + "\" para \"" + new_name + "\"", 1};
       }
     }
@@ -181,7 +182,18 @@ ReturnFlag function_switch(string user_input) {
     return {"", -1};
   }
 
-  return {"Comando nao identificado", 0};
+  else {
+    string command = command_vec[0]; 
+    for (int i = 1; i < command_vec.size(); i++) {
+      command += " " + command_vec[i];
+    }
+    
+    // cout << command << endl;
+    system(command.c_str());
+    return {"", 1};
+  }
+
+  // return {"Comando nao identificado", 0};
 }
 
 int main () {
@@ -204,7 +216,6 @@ int main () {
     }
   }
   file.close();
-
 
   while (!exit) {
     cout << "lucash> ";
