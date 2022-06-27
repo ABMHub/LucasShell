@@ -64,22 +64,9 @@ class Aliases {
   private:
     map<string, string> cmd_pt;
 
-    string remove_aspas(string in) {
-      if (in.size() < 2) return in;
-      if (in[0] == '"' && in[in.size()-1] == '"') { // ! nao eh possivel fazer alias de varias palavras separadas por espaco
-        in.erase(0, 1);
-        in.pop_back();
-      }
-      return in;
-    }
-
   public:
 
     ReturnFlag add_alias(string old_name, string new_name) {
-      old_name = remove_aspas(old_name);
-      new_name = remove_aspas(new_name);
-
-
       if (old_name == new_name) return {"O alias nao pode ser igual ao comando original", 0};
 
       if (cmd_pt.count(old_name) > 0) {
@@ -104,12 +91,61 @@ class Aliases {
 
 // Funcao que recebe uma string, e retorna um vetor de strings, divididas pelos espacos em branco.
 vector<string> string_split(string cmd) {
-  vector<string> ret;
+  vector<string> temp;
   stringstream stream(cmd);
   string word;
 
   while (stream >> word) {
-    ret.push_back(word);
+    temp.push_back(word);
+  }
+
+  vector<string> ret;
+  bool aspas_flag = false;
+  string sentence_str = "";
+
+  for (int i = 0; i < temp.size(); i++) {
+
+    string temp_str = temp[i];
+    int str_size = temp_str.size();
+
+    if (aspas_flag == false) {
+      // palavra com aspas no comeco e no final:
+      if (temp_str[0] == '"' && temp_str[str_size-1] == '"') {
+        temp_str.erase(str_size-1, 1);
+        temp_str.erase(0, 1);
+        ret.push_back(temp_str);
+      }
+
+      // palavra que abre sentenca
+      else if (temp_str[0] == '"') {
+        temp_str.erase(0, 1);
+        aspas_flag = true;
+        sentence_str = temp_str;
+      }
+
+      // palavra sem aspas, fora de aspas
+      else {
+        ret.push_back(temp_str);
+      }
+    }
+    
+    else { // aspas_flag == true
+      // palavra que fecha sentenca
+      if (temp_str[str_size-1] == '"') {
+        temp_str.erase(str_size-1, 1);
+        sentence_str += " " + temp_str;
+        ret.push_back(sentence_str);
+
+        aspas_flag = false;
+        sentence_str = "";
+      }
+
+      // palavra no meio de uma sentenca
+      else {
+        sentence_str += " " + temp_str;
+      }
+    }
+
   }
   return ret;
 }
