@@ -5,6 +5,7 @@
 #include <map>
 #include <fstream>
 #include <numeric>
+#include <unistd.h>
 
 using namespace std;
 
@@ -196,6 +197,15 @@ ReturnFlag function_switch(string user_input) {
   // return {"Comando nao identificado", 0};
 }
 
+string get_current_user() {
+  char curr_name[256];
+  auto name = popen("whoami", "r");
+  fgets(curr_name, 256, name);
+  string current_user(curr_name);
+  current_user.pop_back();
+  return current_user;
+}
+
 int main () {
   bool exit = false;
 
@@ -217,8 +227,13 @@ int main () {
   }
   file.close();
 
+  string current_user = get_current_user();
   while (!exit) {
-    cout << "lucash> ";
+    char curr_path[256];
+    getcwd(curr_path, 256);
+
+    cout <<  "lucash-" + current_user + "-" + string(curr_path) + "> ";
+
     string user_input;
     getline(cin, user_input);
 
