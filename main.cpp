@@ -161,7 +161,7 @@ ReturnFlag function_switch(string user_input) {
   command_vec[0] = alias.cmd_translation(command_vec[0]);
 
   if (command_vec[0] == "historico") {
-    if (command_vec.size() > 2) return {"O comando historico recebe um ou nenhum parametros.", 0};
+    if (command_vec.size() > 2) return {"historico: O comando recebe um ou nenhum parametros.", 0};
     else if (command_vec.size() == 1) {
       hist.print_hist();
       return {"", 1};
@@ -169,14 +169,30 @@ ReturnFlag function_switch(string user_input) {
     else if (command_vec.size() == 2) {
       int position = stoi(command_vec[1]);
       string cmd = hist.get_command(position);
-      if (cmd == "") return {"Esta posicao no historico (ainda) nao existe", 0};
+      if (cmd == "") return {"historico: Esta posicao no historico (ainda) nao existe", 0};
       return function_switch(cmd); // ! possibilidade de loop infinito de comandos no historico
     }
   }
 
   else if (command_vec[0] == "alias") {
-    if (command_vec.size() != 3) return {"O comando recebe dois parametros", 0}; 
+    if (command_vec.size() != 3) return {"alias: O comando recebe dois parametros", 0}; 
     return alias.add_alias(command_vec[1], command_vec[2]);
+  }
+
+  else if (command_vec[0] == "cd") {
+    if (command_vec.size() == 1) {
+      chdir("/");
+      return {"", 1};
+    }
+
+    else if (command_vec.size() == 2) {
+      chdir(command_vec[1].c_str());
+      return {"", 1};
+    }
+    
+    else {
+      return {"cd: Numero invalido de argumentos.", 0};
+    }
   }
 
   else if (command_vec[0] == "exit") {
