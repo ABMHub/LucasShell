@@ -91,8 +91,148 @@ class Aliases {
     }
 };
 
-// Funcao que recebe uma string, e retorna um vetor de strings, divididas pelos espacos em branco.
-vector<string> string_split(string cmd) {
+class Shell {
+  private:
+    History hist;
+    Aliases alias;
+    string curr_user;
+    string curr_path;
+
+    ReturnFlag function_switch(string user_input);
+    vector<string> string_split(string cmd);
+    void update_current_user();
+    void update_current_path();
+
+    bool alias_init();    
+
+  public:
+    Shell() {
+      alias_init();
+      update_current_user();
+      update_current_path();
+    }
+
+    void run() {
+      bool exit = false;
+
+      while (!exit) {
+        cout <<  "lucash-" + curr_user + "-" + curr_path + "> ";
+
+        string user_input;
+        getline(cin, user_input);
+
+        auto cmd_response = function_switch(user_input);
+        if (cmd_response.msg != "") cout << cmd_response.msg << endl;
+        if (cmd_response.cod == -1) exit = true;
+        
+        hist.create_elem(user_input);
+      }
+      cout << "Encerrando lucash..." << endl;
+      return;
+    }
+};
+
+int main () {
+  Shell lucash;
+  lucash.run();
+  return 0;
+}
+
+void Shell::update_current_path() {
+  char curr_path_cstr[256];
+  getcwd(curr_path_cstr, 256);
+  curr_path = string(curr_path_cstr);
+}
+
+void Shell::update_current_user() {
+  char curr_name[256];
+  auto name = popen("whoami", "r");
+  fgets(curr_name, 256, name);
+  curr_user = string(curr_name);
+  curr_user.pop_back();
+}
+
+bool Shell::alias_init() {
+  ifstream file("./aliases.txt");
+
+  string s;
+  bool flag = false;
+  if (!file.fail()) {
+    while (file.peek() != EOF) {
+      getline(file, s);
+      if (!flag) {
+        auto cmd_response = function_switch(s);
+        if (cmd_response.msg != ""&& cmd_response.cod == 1)
+          cout << cmd_response.msg << endl;
+      }
+    }
+  }
+  else {
+    file.close();
+    return false;
+  }
+  file.close();
+  return true;
+}
+
+ReturnFlag Shell::function_switch(string user_input) {
+  vector<string> command_vec = string_split(user_input);
+  if (command_vec.size() == 0) return {"Comando nao identificado.", 0};
+  command_vec[0] = alias.cmd_translation(command_vec[0]);
+
+  if (command_vec[0] == "historico") {
+    if (command_vec.size() > 2) return {"historico: O comando recebe um ou nenhum parametros.", 0};
+    else if (command_vec.size() == 1) {
+      hist.print_hist();
+      return {"", 1};
+    }
+    else if (command_vec.size() == 2) {
+      int position = stoi(command_vec[1]);
+      string cmd = hist.get_command(position);
+      if (cmd == "") return {"historico: Esta posicao no historico (ainda) nao existe", 0};
+      return function_switch(cmd); // ! possibilidade de loop infinito de comandos no historico
+    }
+  }
+
+  else if (command_vec[0] == "alias") {
+    if (command_vec.size() != 3) return {"alias: O comando recebe dois parametros", 0}; 
+    return alias.add_alias(command_vec[1], command_vec[2]);
+  }
+
+  else if (command_vec[0] == "cd") {
+    if (command_vec.size() > 2) 
+      return {"cd: Numero invalido de argumentos.", 0};
+
+    else if (command_vec.size() == 1) 
+      chdir("/");
+
+    else  // (command_vec.size() == 2)
+      chdir(command_vec[1].c_str());
+    
+    update_current_path();
+    return {"", 1};
+    
+  }
+
+  else if (command_vec[0] == "exit") {
+    return {"", -1};
+  }
+
+  else {
+    string command = command_vec[0]; 
+    for (int i = 1; i < command_vec.size(); i++) {
+      command += " " + command_vec[i];
+    }
+    
+    // cout << command << endl;
+    system(command.c_str());
+    return {"", 1};
+  }
+
+  // return {"Comando nao identificado", 0};
+}
+
+vector<string> Shell::string_split(string cmd) {
   vector<string> temp;
   stringstream stream(cmd);
   string word;
@@ -150,115 +290,4 @@ vector<string> string_split(string cmd) {
 
   }
   return ret;
-}
-
-History hist;
-Aliases alias;
-
-ReturnFlag function_switch(string user_input) {
-  vector<string> command_vec = string_split(user_input);
-  if (command_vec.size() == 0) return {"Comando nao identificado.", 0};
-  command_vec[0] = alias.cmd_translation(command_vec[0]);
-
-  if (command_vec[0] == "historico") {
-    if (command_vec.size() > 2) return {"historico: O comando recebe um ou nenhum parametros.", 0};
-    else if (command_vec.size() == 1) {
-      hist.print_hist();
-      return {"", 1};
-    }
-    else if (command_vec.size() == 2) {
-      int position = stoi(command_vec[1]);
-      string cmd = hist.get_command(position);
-      if (cmd == "") return {"historico: Esta posicao no historico (ainda) nao existe", 0};
-      return function_switch(cmd); // ! possibilidade de loop infinito de comandos no historico
-    }
-  }
-
-  else if (command_vec[0] == "alias") {
-    if (command_vec.size() != 3) return {"alias: O comando recebe dois parametros", 0}; 
-    return alias.add_alias(command_vec[1], command_vec[2]);
-  }
-
-  else if (command_vec[0] == "cd") {
-    if (command_vec.size() == 1) {
-      chdir("/");
-      return {"", 1};
-    }
-
-    else if (command_vec.size() == 2) {
-      chdir(command_vec[1].c_str());
-      return {"", 1};
-    }
-    
-    else {
-      return {"cd: Numero invalido de argumentos.", 0};
-    }
-  }
-
-  else if (command_vec[0] == "exit") {
-    return {"", -1};
-  }
-
-  else {
-    string command = command_vec[0]; 
-    for (int i = 1; i < command_vec.size(); i++) {
-      command += " " + command_vec[i];
-    }
-    
-    // cout << command << endl;
-    system(command.c_str());
-    return {"", 1};
-  }
-
-  // return {"Comando nao identificado", 0};
-}
-
-string get_current_user() {
-  char curr_name[256];
-  auto name = popen("whoami", "r");
-  fgets(curr_name, 256, name);
-  string current_user(curr_name);
-  current_user.pop_back();
-  return current_user;
-}
-
-int main () {
-  bool exit = false;
-
-  // inicializacao do shell
-
-  ifstream file("./aliases.txt");
-  
-  string s;
-  bool flag = false;
-  if (!file.fail()) {
-    while (file.peek() != EOF) {
-      getline(file, s);
-      if (!flag) {
-        auto cmd_response = function_switch(s);
-        if (cmd_response.msg != ""&& cmd_response.cod == 1)
-          cout << cmd_response.msg << endl;
-      }
-    }
-  }
-  file.close();
-
-  string current_user = get_current_user();
-  while (!exit) {
-    char curr_path[256];
-    getcwd(curr_path, 256);
-
-    cout <<  "lucash-" + current_user + "-" + string(curr_path) + "> ";
-
-    string user_input;
-    getline(cin, user_input);
-
-    auto cmd_response = function_switch(user_input);
-    if (cmd_response.msg != "") cout << cmd_response.msg << endl;
-    if (cmd_response.cod == -1) exit = true;
-    
-    hist.create_elem(user_input);
-  }
-  cout << "Encerrando lucash..." << endl;
-  return 0;
 }
