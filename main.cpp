@@ -177,7 +177,7 @@ bool Shell::alias_init() {
 
 ReturnFlag Shell::function_switch(string user_input) {
   vector<string> command_vec = string_split(user_input);
-  if (command_vec.size() == 0) return {"Comando nao identificado.", 0};
+  if (command_vec.size() == 0) return {"", 0};
   command_vec[0] = alias.cmd_translation(command_vec[0]);
 
   if (command_vec[0] == "historico") {
@@ -216,6 +216,11 @@ ReturnFlag Shell::function_switch(string user_input) {
 
   else if (command_vec[0] == "exit") {
     return {"", -1};
+  }
+
+  else if (command_vec[0] == "ver") {
+    cout << endl << "Versao: 0.5.2" << endl << "Atualizado em 29/06/2022" << endl << "Autor: Lucas ABM" << endl << endl;
+    return {"", 1};
   }
 
   else {
