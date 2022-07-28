@@ -6,6 +6,7 @@
 #include <fstream>
 #include <numeric>
 #include <unistd.h>
+#include <sys/wait.h>
 
 using namespace std;
 
@@ -97,11 +98,19 @@ class Shell {
     Aliases alias;
     string curr_user;
     string curr_path;
+    vector<string> paths;
 
+    bool debug = false;
+
+    ReturnFlag exec_cmd(string path, const char ** argv);
     ReturnFlag function_switch(string user_input);
     vector<string> string_split(string cmd);
+    vector<string> generic_split(string str, string delimiter);
+    bool cmd_exists(string str);
+
     void update_current_user();
     void update_current_path();
+    ReturnFlag get_cmd_paths();
 
     bool alias_init();    
 
@@ -110,6 +119,9 @@ class Shell {
       alias_init();
       update_current_user();
       update_current_path();
+      
+      auto response = get_cmd_paths();
+      if (response.msg != "") cout << response.msg << endl;
     }
 
     void run() {
@@ -138,6 +150,27 @@ int main () {
   return 0;
 }
 
+ReturnFlag Shell::get_cmd_paths() {
+  ifstream file("/home/" + curr_user + "/.BRbshrc_profile");
+
+  string s;
+  bool flag = false;
+  if (!file.fail() && file.peek() != EOF) {
+    getline(file, s);
+    s.erase(0, 5);
+    s.erase(s.size()-1, 1);
+
+    paths = generic_split(s, ";");
+  }
+  else {
+    file.close();
+    return {"Arquivo de configuracao inexistente ou mal formatado", 0};
+  }
+    
+  file.close();
+  return {"", 1};
+}
+
 void Shell::update_current_path() {
   char curr_path_cstr[256];
   getcwd(curr_path_cstr, 256);
@@ -162,7 +195,7 @@ bool Shell::alias_init() {
       getline(file, s);
       if (!flag) {
         auto cmd_response = function_switch(s);
-        if (cmd_response.msg != ""&& cmd_response.cod == 1)
+        if (cmd_response.msg != "" && cmd_response.cod == 1 && debug)
           cout << cmd_response.msg << endl;
       }
     }
@@ -225,16 +258,64 @@ ReturnFlag Shell::function_switch(string user_input) {
 
   else {
     string command = command_vec[0]; 
-    for (int i = 1; i < command_vec.size(); i++) {
-      command += " " + command_vec[i];
-    }
     
-    // cout << command << endl;
-    system(command.c_str());
-    return {"", 1};
+    bool found = false;
+    int i;
+
+    const char * argv[command_vec.size() + 1];
+  
+    for (i = 0; i < paths.size() && !found; i++) 
+      if (cmd_exists(paths[i] + "/" + command))
+        found = true;
+
+    if (!found) return {"Nao achei o comando", 0};
+    i--;
+
+    argv[0] = (paths[i] + "/" + command).c_str();
+    for (int j = 1; j < command_vec.size(); j++) 
+      argv[j] = command_vec[j].c_str();
+
+    argv[command_vec.size()] = NULL;
+
+    return exec_cmd(paths[i] + "/" + command, argv);
   }
 
   // return {"Comando nao identificado", 0};
+}
+
+ReturnFlag Shell::exec_cmd(string path, const char ** argv) {
+  int status;
+  pid_t pid = fork();
+  if (pid == -1) return {"Nao foi possivel realizar o fork", 0};
+  else if (pid == 0) {
+    execv(path.c_str(), (char **) argv);
+    exit(0);
+  }
+  else {
+    waitpid(pid, &status, 0); // ? talvez tenha algo de util nesse status
+  }
+  return {"", 1};
+}
+
+vector<string> Shell::generic_split(string str, string delimiter) {
+  size_t pos = 0;
+  string token;
+  vector<string> ret_vec;
+
+  pos = str.find(delimiter);
+  while (pos != string::npos) {
+    ret_vec.push_back(str.substr(0, pos));
+    str.erase(0, pos + delimiter.length());
+    pos = str.find(delimiter);
+  }
+  ret_vec.push_back(str);
+
+  return ret_vec;
+}
+
+bool Shell::cmd_exists(string str) {
+  auto f = ifstream(str);
+  return f.good();
 }
 
 vector<string> Shell::string_split(string cmd) {
