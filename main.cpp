@@ -100,12 +100,17 @@ class Shell {
     string curr_path;
     vector<string> paths;
 
+    int stdin_backup;
+    int stdout_backup;
+
     bool debug = false;
 
     ReturnFlag exec_cmd(string path, const char ** argv);
     ReturnFlag function_switch(string user_input);
     vector<string> string_split(string cmd);
     vector<string> generic_split(string str, string delimiter);
+    int redirect(vector<string> cmd);
+    void redirect();
     bool cmd_exists(string str);
 
     void update_current_user();
@@ -134,6 +139,7 @@ class Shell {
         getline(cin, user_input);
 
         auto cmd_response = function_switch(user_input);
+        redirect();
         if (cmd_response.msg != "") cout << cmd_response.msg << endl;
         if (cmd_response.cod == -1) exit = true;
         
@@ -208,10 +214,42 @@ bool Shell::alias_init() {
   return true;
 }
 
+void Shell::redirect() {
+  dup2(stdin_backup, STDIN_FILENO);
+  dup2(stdout_backup, STDOUT_FILENO);
+}
+
+int Shell::redirect(vector<string> cmd) {
+  for (int i = 0; i < cmd.size()-1; i++) { // evita seg fault
+    if (cmd[i] == "<") { // input
+      stdin_backup = dup(STDIN_FILENO);
+      freopen(cmd[i+1].c_str(), "r", stdin);
+      return i;
+    }
+    else if (cmd[i] == ">") { // output w
+      stdout_backup = dup(STDOUT_FILENO);
+      freopen(cmd[i+1].c_str(), "w", stdout);
+      return i;
+    }
+    else if (cmd[i] == ">>") { // output a
+      stdout_backup = dup(STDOUT_FILENO);
+      freopen(cmd[i+1].c_str(), "a", stdout);
+      return i;
+    }
+  }
+  return -1;
+}
+
 ReturnFlag Shell::function_switch(string user_input) {
   vector<string> command_vec = string_split(user_input);
   if (command_vec.size() == 0) return {"", 0};
   command_vec[0] = alias.cmd_translation(command_vec[0]);
+
+  int a = redirect(command_vec);
+  if (a != -1) { // ? talvez nao seja generico. analisar.
+    command_vec.pop_back();
+    command_vec.pop_back();
+  }
 
   if (command_vec[0] == "historico") {
     if (command_vec.size() > 2) return {"historico: O comando recebe um ou nenhum parametros.", 0};
