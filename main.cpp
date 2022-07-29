@@ -80,7 +80,8 @@ class Aliases {
 
       else {
         cmd_pt.insert({new_name, old_name});
-        return {"Novo alias adicionado: de \"" + old_name + "\" para \"" + new_name + "\"", 1};
+        // return {"Novo alias adicionado: de \"" + old_name + "\" para \"" + new_name + "\"", 1};
+        return {"", 1};
       }
     }
 
@@ -106,7 +107,8 @@ class Shell {
     bool debug = false;
 
     ReturnFlag exec_cmd(string path, const char ** argv);
-    ReturnFlag function_switch(string user_input);
+    ReturnFlag function_switch(vector<string> command_vec);
+    ReturnFlag pipe_parse(string user_input);
     vector<string> string_split(string cmd);
     vector<string> generic_split(string str, string delimiter);
     int redirect(vector<string> cmd);
@@ -138,8 +140,12 @@ class Shell {
         string user_input;
         getline(cin, user_input);
 
-        auto cmd_response = function_switch(user_input);
+        int stat;
+        waitpid(-1, &stat, WNOHANG); // ? checar se eh wnohang mesmo
+        auto cmd_response = pipe_parse(user_input);
+
         redirect();
+
         if (cmd_response.msg != "") cout << cmd_response.msg << endl;
         if (cmd_response.cod == -1) exit = true;
         
@@ -200,9 +206,7 @@ bool Shell::alias_init() {
     while (file.peek() != EOF) {
       getline(file, s);
       if (!flag) {
-        auto cmd_response = function_switch(s);
-        if (cmd_response.msg != "" && cmd_response.cod == 1 && debug)
-          cout << cmd_response.msg << endl;
+        auto cmd_response = pipe_parse(s);
       }
     }
   }
@@ -240,8 +244,55 @@ int Shell::redirect(vector<string> cmd) {
   return -1;
 }
 
-ReturnFlag Shell::function_switch(string user_input) {
+ReturnFlag Shell::pipe_parse(string user_input) {
+  int last = 0;
+  bool background = user_input[user_input.size() - 1] == '&';
+  if (background) user_input.pop_back();
+  vector<vector<string>> commands;
   vector<string> command_vec = string_split(user_input);
+  for (int i = 0; i < command_vec.size(); i++) {
+    if (command_vec[i] == "|") {
+      vector<string> temp;
+      for (int j = last; j < i; j++) 
+        temp.push_back(command_vec[j]);
+      
+      commands.push_back(temp);
+      last = i+1;
+    }
+  }
+
+  vector<string> temp;
+  for (int j = last; j < command_vec.size(); j++) 
+    temp.push_back(command_vec[j]);
+  commands.push_back(temp);
+
+  
+  pid_t pid;
+  bool child = false;
+  if (background) {
+    pid = fork();
+    if (pid == -1)
+      return {"Nao foi possivel realizar o fork", 0};
+
+    else if (pid == 0) {
+      background = false;
+      child = true;
+    }
+  }
+
+  for (int i = 0; i < commands.size() && !background; i++) {
+    auto ret = function_switch(commands[i]);
+    if (ret.msg != "") cout << ret.msg << endl;
+    if (ret.cod == -1) return {"", -1};
+    redirect();
+  }
+
+  if (child) exit(0);
+
+  return {"", 1};
+}
+
+ReturnFlag Shell::function_switch(vector<string> command_vec) {
   if (command_vec.size() == 0) return {"", 0};
   command_vec[0] = alias.cmd_translation(command_vec[0]);
 
@@ -261,7 +312,7 @@ ReturnFlag Shell::function_switch(string user_input) {
       int position = stoi(command_vec[1]);
       string cmd = hist.get_command(position);
       if (cmd == "") return {"historico: Esta posicao no historico (ainda) nao existe", 0};
-      return function_switch(cmd); // ! possibilidade de loop infinito de comandos no historico
+      return pipe_parse(cmd); // ! possibilidade de loop infinito de comandos no historico
     }
   }
 
@@ -294,31 +345,30 @@ ReturnFlag Shell::function_switch(string user_input) {
     return {"", 1};
   }
 
-  else {
-    string command = command_vec[0]; 
-    
-    bool found = false;
-    int i;
+  // else
 
-    const char * argv[command_vec.size() + 1];
+  string command = command_vec[0]; 
   
-    for (i = 0; i < paths.size() && !found; i++) 
-      if (cmd_exists(paths[i] + "/" + command))
-        found = true;
+  bool found = false;
+  int i;
 
-    if (!found) return {"Nao achei o comando", 0};
-    i--;
+  const char * argv[command_vec.size() + 1];
 
-    argv[0] = (paths[i] + "/" + command).c_str();
-    for (int j = 1; j < command_vec.size(); j++) 
-      argv[j] = command_vec[j].c_str();
+  for (i = 0; i < paths.size() && !found; i++) 
+    if (cmd_exists(paths[i] + "/" + command))
+      found = true;
 
-    argv[command_vec.size()] = NULL;
+  if (!found) return {"Nao achei o comando", 0};
+  i--;
 
-    return exec_cmd(paths[i] + "/" + command, argv);
-  }
+  argv[0] = (paths[i] + "/" + command).c_str();
+  for (int j = 1; j < command_vec.size(); j++) 
+    argv[j] = command_vec[j].c_str();
 
-  // return {"Comando nao identificado", 0};
+  argv[command_vec.size()] = NULL;
+
+  return exec_cmd(paths[i] + "/" + command, argv);
+
 }
 
 ReturnFlag Shell::exec_cmd(string path, const char ** argv) {
