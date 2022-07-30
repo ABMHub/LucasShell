@@ -107,7 +107,7 @@ class Shell {
     bool debug = false;
 
     ReturnFlag exec_cmd(string path, const char ** argv);
-    ReturnFlag function_switch(vector<string> command_vec);
+    ReturnFlag function_switch(vector<string> command_vec, bool child);
     ReturnFlag pipe_parse(string user_input);
     vector<string> string_split(string cmd);
     vector<string> generic_split(string str, string delimiter);
@@ -280,11 +280,56 @@ ReturnFlag Shell::pipe_parse(string user_input) {
     }
   }
 
-  for (int i = 0; i < commands.size() && !background; i++) {
-    auto ret = function_switch(commands[i]);
-    if (ret.msg != "") cout << ret.msg << endl;
-    if (ret.cod == -1) return {"", -1};
-    redirect();
+  if (background) return {"", 1};
+  if (commands.size() == 1) 
+    return function_switch(commands[0], false);
+
+  vector<int[2]> pipes(commands.size()-1);
+  for (int i = 0; i < commands.size()-1; i++) {
+    pipe(pipes[i]);
+  }
+
+  vector<pid_t> pids;
+
+  for (int i = 0; i < commands.size(); i++) {
+    pid = fork();
+    if (pid == -1) return {"Nao foi possivel realizar o fork", 0};
+
+    else if (pid == 0) {
+      if (i != 0) {
+        dup2(pipes[i-1][0], STDIN_FILENO);
+      }
+      if (i != commands.size()-1) { 
+        dup2(pipes[i][1], STDOUT_FILENO);
+      }
+
+      for (int j = 0; j < pipes.size(); j++) {
+        close(pipes[j][0]);
+        close(pipes[j][1]);
+      }
+
+      auto ret = function_switch(commands[i], true);
+      if (ret.msg != "") cout << ret.msg << endl;
+      if (ret.cod == -1) return {"", -1};
+      exit(0);
+    }
+
+    else {
+      pids.push_back(pid);
+    }
+  }
+  // 0 - 0 1
+  // 1 - 0 0 . 1 1
+  // 2 - 1 0
+
+  for (int i = 0; i < pipes.size(); i++) {
+    close(pipes[i][0]);
+    close(pipes[i][1]);
+  }
+
+  for (int i = 0; i < pids.size(); i++) {
+    int * stat;
+    waitpid(pids[i], stat, 0);
   }
 
   if (child) exit(0);
@@ -292,7 +337,7 @@ ReturnFlag Shell::pipe_parse(string user_input) {
   return {"", 1};
 }
 
-ReturnFlag Shell::function_switch(vector<string> command_vec) {
+ReturnFlag Shell::function_switch(vector<string> command_vec, bool child) {
   if (command_vec.size() == 0) return {"", 0};
   command_vec[0] = alias.cmd_translation(command_vec[0]);
 
@@ -368,7 +413,6 @@ ReturnFlag Shell::function_switch(vector<string> command_vec) {
   argv[command_vec.size()] = NULL;
 
   return exec_cmd(paths[i] + "/" + command, argv);
-
 }
 
 ReturnFlag Shell::exec_cmd(string path, const char ** argv) {
