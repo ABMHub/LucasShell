@@ -126,9 +126,9 @@ class Shell {
 
   public:
     Shell() {
-      alias_init();
       update_current_user();
       update_current_path();
+      alias_init();
       
       auto response = get_cmd_paths();
       if (response.msg != "") cout << response.msg << endl;
@@ -169,7 +169,6 @@ ReturnFlag Shell::get_cmd_paths() {
   ifstream file("/home/" + curr_user + "/.BRbshrc_profile");
 
   string s;
-  bool flag = false;
   if (!file.fail() && file.peek() != EOF) {
     getline(file, s);
     s.erase(0, 5);
@@ -201,7 +200,7 @@ void Shell::update_current_user() {
 }
 
 bool Shell::alias_init() {
-  ifstream file("./aliases.txt");
+  ifstream file("/home/" + curr_user + "/.BRbshrc");
 
   string s;
   bool flag = false;
@@ -227,7 +226,7 @@ void Shell::redirect() {
 }
 
 int Shell::redirect(vector<string> cmd) {
-  for (int i = 0; i < cmd.size()-1; i++) { // evita seg fault
+  for (unsigned int i = 0; i < cmd.size()-1; i++) { // evita seg fault
     if (cmd[i] == "<") { // input
       stdin_backup = dup(STDIN_FILENO);
       freopen(cmd[i+1].c_str(), "r", stdin);
@@ -253,10 +252,10 @@ ReturnFlag Shell::pipe_parse(string user_input) {
   if (background) user_input.pop_back();
   vector<vector<string>> commands;
   vector<string> command_vec = string_split(user_input);
-  for (int i = 0; i < command_vec.size(); i++) {
+  for (unsigned int i = 0; i < command_vec.size(); i++) {
     if (command_vec[i] == "|") {
       vector<string> temp;
-      for (int j = last; j < i; j++) 
+      for (unsigned int j = last; j < i; j++) 
         temp.push_back(command_vec[j]);
       
       commands.push_back(temp);
@@ -265,7 +264,7 @@ ReturnFlag Shell::pipe_parse(string user_input) {
   }
 
   vector<string> temp;
-  for (int j = last; j < command_vec.size(); j++) 
+  for (unsigned int j = last; j < command_vec.size(); j++) 
     temp.push_back(command_vec[j]);
   commands.push_back(temp);
 
@@ -288,13 +287,13 @@ ReturnFlag Shell::pipe_parse(string user_input) {
     return function_switch(commands[0], false);
 
   vector<int[2]> pipes(commands.size()-1);
-  for (int i = 0; i < commands.size()-1; i++) {
+  for (unsigned int i = 0; i < commands.size()-1; i++) {
     pipe(pipes[i]);
   }
 
   vector<pid_t> pids;
 
-  for (int i = 0; i < commands.size(); i++) {
+  for (unsigned int i = 0; i < commands.size(); i++) {
     pid = fork();
     if (pid == -1) return {"Nao foi possivel realizar o fork", 0};
 
@@ -306,7 +305,7 @@ ReturnFlag Shell::pipe_parse(string user_input) {
         dup2(pipes[i][1], STDOUT_FILENO);
       }
 
-      for (int j = 0; j < pipes.size(); j++) {
+      for (unsigned int j = 0; j < pipes.size(); j++) {
         close(pipes[j][0]);
         close(pipes[j][1]);
       }
@@ -321,14 +320,14 @@ ReturnFlag Shell::pipe_parse(string user_input) {
       pids.push_back(pid);
     }
   }
-  for (int i = 0; i < pipes.size(); i++) {
+  for (unsigned int i = 0; i < pipes.size(); i++) {
     close(pipes[i][0]);
     close(pipes[i][1]);
   }
 
-  for (int i = 0; i < pids.size(); i++) {
-    int * stat;
-    waitpid(pids[i], stat, 0);
+  for (unsigned int i = 0; i < pids.size(); i++) {
+    int stat;
+    waitpid(pids[i], &stat, 0);
   }
 
   if (child) exit(0);
@@ -394,7 +393,7 @@ ReturnFlag Shell::function_switch(vector<string> command_vec, bool child) {
   string command = command_vec[0]; 
   
   bool found = false;
-  int i;
+  unsigned int i;
 
   const char * argv[command_vec.size() + 1];
 
@@ -406,7 +405,7 @@ ReturnFlag Shell::function_switch(vector<string> command_vec, bool child) {
   i--;
 
   argv[0] = (paths[i] + "/" + command).c_str();
-  for (int j = 1; j < command_vec.size(); j++) 
+  for (unsigned int j = 1; j < command_vec.size(); j++) 
     argv[j] = command_vec[j].c_str();
 
   argv[command_vec.size()] = NULL;
@@ -441,7 +440,7 @@ vector<string> generic_split(string str, string delimiter) {
   }
   ret_vec.push_back(str);
 
-  for (int i = 0; i < ret_vec.size(); i++) 
+  for (unsigned int i = 0; i < ret_vec.size(); i++) 
     if (ret_vec[i] == "" || ret_vec[i] == " ") ret_vec.erase(ret_vec.begin() + i);
 
   return ret_vec;
@@ -465,7 +464,7 @@ vector<string> Shell::string_split(string cmd) {
   bool aspas_flag = false;
   string sentence_str = "";
 
-  for (int i = 0; i < temp.size(); i++) {
+  for (unsigned int i = 0; i < temp.size(); i++) {
 
     string temp_str = temp[i];
     int str_size = temp_str.size();
