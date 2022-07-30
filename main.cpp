@@ -91,7 +91,7 @@ class Aliases {
 
     string cmd_translation(string cmd) {
       if (cmd_pt.count(cmd) > 0) {
-        return cmd_translation(cmd_pt[cmd]); // ! eh possivel fazer loop infinito na funcao recursiva. rever.
+        return cmd_pt[cmd];
       }
       return cmd;
     }
