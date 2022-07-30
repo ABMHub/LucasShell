@@ -15,6 +15,8 @@ typedef struct {
   int cod; // -1: exit, 0: deu ruim mas nao faca nada, 1: deu bom
 } ReturnFlag;
 
+vector<string> generic_split(string str, string delimiter);
+
 class History {
   private:
     int cmd_count;      // quantidade de comandos atualmente no historico
@@ -42,6 +44,8 @@ class History {
 
     // Coloca um comando no historico, com um maximo de 10 comandos armazenados simultaneamente.
     void create_elem (string command) {
+      if (generic_split(command, " ")[0] == "historico") return;
+      
       hist.push_back(command);
       if (cmd_count == 10) 
         hist.pop_front();
@@ -110,7 +114,6 @@ class Shell {
     ReturnFlag function_switch(vector<string> command_vec, bool child);
     ReturnFlag pipe_parse(string user_input);
     vector<string> string_split(string cmd);
-    vector<string> generic_split(string str, string delimiter);
     int redirect(vector<string> cmd);
     void redirect();
     bool cmd_exists(string str);
@@ -429,7 +432,7 @@ ReturnFlag Shell::exec_cmd(string path, const char ** argv) {
   return {"", 1};
 }
 
-vector<string> Shell::generic_split(string str, string delimiter) {
+vector<string> generic_split(string str, string delimiter) {
   size_t pos = 0;
   string token;
   vector<string> ret_vec;
