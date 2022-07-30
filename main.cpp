@@ -321,10 +321,6 @@ ReturnFlag Shell::pipe_parse(string user_input) {
       pids.push_back(pid);
     }
   }
-  // 0 - 0 1
-  // 1 - 0 0 . 1 1
-  // 2 - 1 0
-
   for (int i = 0; i < pipes.size(); i++) {
     close(pipes[i][0]);
     close(pipes[i][1]);
@@ -360,7 +356,7 @@ ReturnFlag Shell::function_switch(vector<string> command_vec, bool child) {
       int position = stoi(command_vec[1]);
       string cmd = hist.get_command(position);
       if (cmd == "") return {"historico: Esta posicao no historico (ainda) nao existe", 0};
-      return pipe_parse(cmd); // ! possibilidade de loop infinito de comandos no historico
+      return pipe_parse(cmd);
     }
   }
 
@@ -444,6 +440,9 @@ vector<string> generic_split(string str, string delimiter) {
     pos = str.find(delimiter);
   }
   ret_vec.push_back(str);
+
+  for (int i = 0; i < ret_vec.size(); i++) 
+    if (ret_vec[i] == "" || ret_vec[i] == " ") ret_vec.erase(ret_vec.begin() + i);
 
   return ret_vec;
 }
