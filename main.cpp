@@ -7,6 +7,7 @@
 #include <numeric>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 using namespace std;
 
@@ -109,10 +110,13 @@ class Shell {
     int stdout_backup;
 
     bool debug = false;
+    bool batch = false;
 
     ReturnFlag exec_cmd(string path, const char ** argv);
     ReturnFlag function_switch(vector<string> command_vec, bool child);
     ReturnFlag pipe_parse(string user_input);
+    ReturnFlag run_batch_file(string path, bool history);
+    bool is_batch_file(string line);
     vector<string> string_split(string cmd);
     int redirect(vector<string> cmd);
     void redirect();
@@ -134,10 +138,28 @@ class Shell {
       if (response.msg != "") cout << response.msg << endl;
     }
 
-    void run() {
-      bool exit = false;
+    Shell(string path) {
+      batch = true;
+      if (!is_batch_file(path)) {
+        cout << "Batch file incompativel";
+        return;
+      }
 
-      while (!exit) {
+      update_current_user();
+      update_current_path();
+      alias_init();
+      
+      auto response = get_cmd_paths();
+      if (response.msg != "") cout << response.msg << endl;
+
+      response = run_batch_file(path, true);
+      if (response.msg != "") cout << response.msg << endl;
+    }
+
+    void run() {
+      bool exit_flag = false;
+
+      while (!exit_flag) {
         cout <<  "lucash-" + curr_user + "-" + curr_path + "> ";
 
         string user_input;
@@ -150,8 +172,9 @@ class Shell {
         redirect();
 
         if (cmd_response.msg != "") cout << cmd_response.msg << endl;
-        if (cmd_response.cod == -1) exit = true;
-        
+        if (cmd_response.cod == -1) exit_flag = true;
+        if (cmd_response.cod == -2) exit(0);
+
         hist.create_elem(user_input);
       }
       cout << "Encerrando lucash..." << endl;
@@ -159,9 +182,17 @@ class Shell {
     }
 };
 
-int main () {
-  Shell lucash;
-  lucash.run();
+int main (int argc, char *argv[]) {
+  if (argc == 1) {
+    Shell lucash;
+    lucash.run();
+  }
+  
+  else if (argc == 2) {
+    string path = argv[1];
+    Shell lucash(path);
+  }
+
   return 0;
 }
 
@@ -175,6 +206,7 @@ ReturnFlag Shell::get_cmd_paths() {
     s.erase(s.size()-1, 1);
 
     paths = generic_split(s, ";");
+    paths.insert(paths.begin(), "");
   }
   else {
     file.close();
@@ -200,24 +232,68 @@ void Shell::update_current_user() {
 }
 
 bool Shell::alias_init() {
-  ifstream file("/home/" + curr_user + "/.BRbshrc");
+  // ifstream file("/home/" + curr_user + "/.BRbshrc");
+
+  auto ret = run_batch_file("/home/" + curr_user + "/.BRbshrc", false);
+  return ret.cod == 1;
+}
+
+bool Shell::is_batch_file(string path) {
+  struct stat fs;
+  stat(path.c_str(), &fs);
+  if (!(fs.st_mode & S_IXUSR)) 
+    return false;
+  
+  ifstream file(path);
+  string str;
+  getline(file, str);
+
+  if (!(str[0] == '#' && str[1] == '!')) 
+    return false;
+
+  if (batch) return true;
+
+  unsigned int i;
+  for (i = 2; i < str.size(); i++) 
+    if (str[i] != ' ')
+      break;  
+
+  str.erase(0, i);
+
+  const char * argv[3];
+  argv[0] = str.c_str();
+  argv[1] = path.c_str();
+  argv[2] = NULL;
+
+  exec_cmd(str, argv);
+
+  // cout << "nao tenho permissao de execucao" << endl;
+  return true;
+  // return str[0] == '#';
+}
+
+ReturnFlag Shell::run_batch_file(string path, bool history) {
+  ifstream file(path);
 
   string s;
-  bool flag = false;
   if (!file.fail()) {
     while (file.peek() != EOF) {
       getline(file, s);
-      if (!flag) {
+      if (s[0] != '#' && s != "" && s != "\n" && s != "\r") {
         auto cmd_response = pipe_parse(s);
+        redirect();
+        if (cmd_response.cod < 0) return cmd_response;
+        if (cmd_response.msg != "") cout << cmd_response.msg << endl;
+        if (history) hist.create_elem(s);
       }
     }
   }
   else {
     file.close();
-    return false;
+    return {"Nao foi possivel abrir o arquivo", 0};
   }
   file.close();
-  return true;
+  return {"", 1};
 }
 
 void Shell::redirect() {
@@ -283,8 +359,13 @@ ReturnFlag Shell::pipe_parse(string user_input) {
   }
 
   if (background) return {"", 1};
-  if (commands.size() == 1) 
-    return function_switch(commands[0], false);
+  if (commands.size() == 1) {
+    auto ret = function_switch(commands[0], child);
+    if (!child) 
+      return ret;
+
+    return {"Processo em background " + to_string(getpid()) + " executado. Comando \"" + user_input + "&\"", -2}; 
+  }
 
   vector<int[2]> pipes(commands.size()-1);
   for (unsigned int i = 0; i < commands.size()-1; i++) {
@@ -330,8 +411,8 @@ ReturnFlag Shell::pipe_parse(string user_input) {
     waitpid(pids[i], &stat, 0);
   }
 
-  if (child) exit(0);
-
+  if (child)
+    return {"Processo em background " + to_string(getpid()) + " executado. Comando \"" + user_input + "&\"", -2}; 
   return {"", 1};
 }
 
@@ -391,26 +472,44 @@ ReturnFlag Shell::function_switch(vector<string> command_vec, bool child) {
   // else
 
   string command = command_vec[0]; 
-  
-  bool found = false;
+
+  int found = 0;
   unsigned int i;
 
   const char * argv[command_vec.size() + 1];
 
-  for (i = 0; i < paths.size() && !found; i++) 
+  for (i = 0; i < paths.size() && found == 0; i++) {
     if (cmd_exists(paths[i] + "/" + command))
-      found = true;
+      found = 1;
 
-  if (!found) return {"Nao achei o comando", 0};
+    else if (cmd_exists(paths[i] + command))
+      found = 2;
+  }
+
+  if (found == 0) return {"Nao achei o comando", 0};
   i--;
 
-  argv[0] = (paths[i] + "/" + command).c_str();
+  const char* path;
+  string temp;
+  if (found == 1) 
+    temp = (paths[i] + string("/") + command);
+  
+  else 
+    temp = (paths[i] + command);
+  
+  path = temp.c_str();
+
+  argv[0] = path;
   for (unsigned int j = 1; j < command_vec.size(); j++) 
     argv[j] = command_vec[j].c_str();
 
   argv[command_vec.size()] = NULL;
 
-  return exec_cmd(paths[i] + "/" + command, argv);
+  if(is_batch_file(path)) 
+    return {"", 1};
+  
+
+  return exec_cmd(path, argv);
 }
 
 ReturnFlag Shell::exec_cmd(string path, const char ** argv) {
@@ -418,7 +517,8 @@ ReturnFlag Shell::exec_cmd(string path, const char ** argv) {
   pid_t pid = fork();
   if (pid == -1) return {"Nao foi possivel realizar o fork", 0};
   else if (pid == 0) {
-    execv(path.c_str(), (char **) argv);
+    if (execv(path.c_str(), (char **) argv) == -1)
+      cout << "Erro ao tentar executar \"" << path << '"' << endl;
     exit(0);
   }
   else {
