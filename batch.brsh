@@ -1,4 +1,4 @@
-#! /home/lucas/Documents/Programacao/LucasShell/main
+#! /home/lucas/Documents/Programacao/LucasShell/BRsh
 processos -elf > texto.txt
 conta -l < texto.txt
 acha ./ | filtra lu > /dev/null &

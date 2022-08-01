@@ -118,7 +118,7 @@ class Shell {
     ReturnFlag run_batch_file(string path, bool history);
     bool is_batch_file(string line);
     vector<string> string_split(string cmd);
-    int redirect(vector<string> cmd);
+    vector<int> redirect(vector<string> cmd);
     void redirect();
     bool cmd_exists(string str);
 
@@ -301,25 +301,26 @@ void Shell::redirect() {
   dup2(stdout_backup, STDOUT_FILENO);
 }
 
-int Shell::redirect(vector<string> cmd) {
+vector<int> Shell::redirect(vector<string> cmd) {
+  vector<int> ret;
   for (unsigned int i = 0; i < cmd.size()-1; i++) { // evita seg fault
     if (cmd[i] == "<") { // input
       stdin_backup = dup(STDIN_FILENO);
       freopen(cmd[i+1].c_str(), "r", stdin);
-      return i;
+      ret.push_back(i);
     }
     else if (cmd[i] == ">") { // output w
       stdout_backup = dup(STDOUT_FILENO);
       freopen(cmd[i+1].c_str(), "w", stdout);
-      return i;
+      ret.push_back(i);
     }
     else if (cmd[i] == ">>") { // output a
       stdout_backup = dup(STDOUT_FILENO);
       freopen(cmd[i+1].c_str(), "a", stdout);
-      return i;
+      ret.push_back(i);
     }
   }
-  return -1;
+  return ret;
 }
 
 ReturnFlag Shell::pipe_parse(string user_input) {
@@ -358,13 +359,15 @@ ReturnFlag Shell::pipe_parse(string user_input) {
     }
   }
 
-  if (background) return {"", 1};
+  if (background) return {"Processo em background " + to_string(pid) + " criado", 1};
   if (commands.size() == 1) {
     auto ret = function_switch(commands[0], child);
     if (!child) 
       return ret;
 
-    return {"Processo em background " + to_string(getpid()) + " executado. Comando \"" + user_input + "&\"", -2}; 
+    if (ret.msg != "") ret.msg += "\n";
+
+    return {ret.msg + "Processo em background " + to_string(getpid()) + " executado. Comando \"" + user_input + "&\"", -2}; 
   }
 
   vector<int[2]> pipes(commands.size()-1);
@@ -379,6 +382,8 @@ ReturnFlag Shell::pipe_parse(string user_input) {
     if (pid == -1) return {"Nao foi possivel realizar o fork", 0};
 
     else if (pid == 0) {
+      stdin_backup = dup(STDIN_FILENO);
+      stdout_backup = dup(STDOUT_FILENO);
       if (i != 0) {
         dup2(pipes[i-1][0], STDIN_FILENO);
       }
@@ -392,6 +397,7 @@ ReturnFlag Shell::pipe_parse(string user_input) {
       }
 
       auto ret = function_switch(commands[i], true);
+      redirect();
       if (ret.msg != "") cout << ret.msg << endl;
       if (ret.cod == -1) return {"", -1};
       exit(0);
@@ -420,10 +426,12 @@ ReturnFlag Shell::function_switch(vector<string> command_vec, bool child) {
   if (command_vec.size() == 0) return {"", 0};
   command_vec[0] = alias.cmd_translation(command_vec[0]);
 
-  int a = redirect(command_vec);
-  if (a != -1) { // ? talvez nao seja generico. analisar.
-    command_vec.pop_back();
-    command_vec.pop_back();
+  vector<int> a = redirect(command_vec);
+  if (!a.empty()) { // ? talvez nao seja generico. analisar.
+    for (int i = a.size()-1; i >= 0; i--) {
+      command_vec.erase(command_vec.begin() + a[i] + 1);
+      command_vec.erase(command_vec.begin() + a[i]);
+    }
   }
 
   if (command_vec[0] == "historico") {
