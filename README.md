@@ -30,4 +30,8 @@ make
 
 O histórico está em 10 registros nesse código. Fiquei em dúvida se deveria ser 7 ou 10, pois o roteiro está com essa informação bagunçada.
 
-Caso você decida usar a batch file presente nesse repositório, se lembre de mudar a path na primeira linha.
+Caso você decida usar a batch file presente nesse repositório, se lembre de mudar a path na primeira linha. O mesmo vale para o .BRbshrc_profile.
+
+Coloque o .BRbshrc_profile e o .BRbshrc na /home/nome_de_usuario.
+
+Link do repositório: [ABMHub/LucasShell](https://github.com/ABMHub/LucasShell)
